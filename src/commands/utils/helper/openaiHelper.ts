@@ -1,18 +1,29 @@
 import OpenAI from 'openai';
+import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat';
+import {failed} from '../errorable';
+import { getOpenAIConfig } from '../config';
+import * as vscode from 'vscode';
 
-const openai = new OpenAI({
-  apiKey: process.env["OPENAI_API_KEY"]
-});
+export async function openaiHelper(error: string): Promise<string> {
+    const body: ChatCompletionCreateParamsNonStreaming = {
+        messages: [{ role: 'user', content: error }],
+        model: 'gpt-3.5-turbo'
+    };
 
-export async function openaiHelper() {
-  // Question: How can use kubectl? is placeholder for the user input.
-  const teststream = await openai.chat.completions.create({ messages: [{ role: 'user', content: 'How can use kubectl?' }], model: 'gpt-3.5-turbo', stream: true }, {
-    timeout: 5 * 1000,
-  });
+    const openaiConfig = getOpenAIConfig();
+  
+    if (failed(openaiConfig)) {
+      vscode.window.showInformationMessage(openaiConfig.error);
+      console.log(openaiConfig.error);
+      return ''
+    } 
 
-  for await (const part of teststream) {
-    process.stdout.write(part.choices[0]?.delta?.content || '');
-  }
+    const openai = new OpenAI({
+      apiKey: openaiConfig.result.apiKey
+    });
 
-  console.log(teststream);
+    const options = { timeout: 30000 };
+    const response = await openai.chat.completions.create(body, options);
+
+    return response.choices[0]?.message?.content || '';
 }

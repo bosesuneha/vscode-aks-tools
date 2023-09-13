@@ -6,6 +6,7 @@ import { BasePanel, PanelDataProvider } from "./BasePanel";
 import { invokeKubectlCommand } from "../commands/utils/kubectl";
 import { InitialState, PresetCommand, ToVsCodeMsgDef, ToWebViewMsgDef } from "../webview-contract/webviewDefinitions/kubectl";
 import { addKubectlCustomCommand, deleteKubectlCustomCommand } from "../commands/utils/config";
+import { openaiHelper } from "../commands/utils/helper/openaiHelper";
 
 export class KubectlPanel extends BasePanel<"kubectl"> {
     constructor(extensionUri: Uri) {
@@ -44,22 +45,27 @@ export class KubectlDataProvider implements PanelDataProvider<"kubectl"> {
         const kubectlresult = await invokeKubectlCommand(this.kubectl, this.kubeConfigFilePath, command);
 
         if (failed(kubectlresult)) {
-            // TODO: Run some kind of AI processing over the command and error to generate an explanation.
-            const explanation = undefined;
+            const aiMsg = await openaiHelper(kubectlresult.error);
+            const explanation = aiMsg ? `OpenAI GPT-3 Suggestion: ${aiMsg}` : null;
             webview.postMessage({
                 command: "runCommandResponse", parameters: {
+                    output: null,
                     errorMessage: kubectlresult.error,
                     explanation
                 }
             });
-
             return;
         }
 
+        // Sometimes there can be an error output even though the command returns a success status code.
+        // This can happen when specifying an invalid namespace, for example.
+        // For this reason we return stderr as well as stdout here.
         webview.postMessage({
             command: "runCommandResponse",
             parameters: {
-                output: kubectlresult.result.stdout
+                output: kubectlresult.result.stdout,
+                errorMessage: kubectlresult.result.stderr,
+                explanation: null
             }
         });
     }
