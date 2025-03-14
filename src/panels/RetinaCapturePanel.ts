@@ -199,6 +199,7 @@ spec:
     private async analyzeLogs() {
         //extract path from downloadPath
         console.log("Current working directory 1:", process.cwd());
-        analyzeLogs(this.downloadPath);
+        console.log(`wsl path ${this.downloadPath}...`);
+        analyzeLogs('/Users/tatsatmishra/Downloads/retina-capture-tats-1_2025-03-14T034720.581Z-aks-agentpool-35202710-vmss000000/retina-capture-tats-1-aks-agentpool-35202710-vmss000000-20250303085412UTC');
     }
 }

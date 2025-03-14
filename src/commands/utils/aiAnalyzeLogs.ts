@@ -2,19 +2,21 @@ import { OpenAI } from "openai";
 import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
-import { execSync } from "child_process";
 
 dotenv.config();
 
 const OPENAI_API_KEY = "";
-const AZURE_OPENAI_ENDPOINT = "https://ai-analyze-logs.openai.azure.com/";
-const AZURE_DEPLOYMENT_NAME = "o3-mini";
 
-const openai = new OpenAI({
-    apiKey: OPENAI_API_KEY,
-    baseURL: `${AZURE_OPENAI_ENDPOINT}/openai/deployments/${AZURE_DEPLOYMENT_NAME}`,
-    defaultQuery: { "api-version": "2024-06-01" },
-});
+// const AZURE_OPENAI_ENDPOINT = "https://ai-analyze-logs.openai.azure.com/";
+// const AZURE_DEPLOYMENT_NAME = "o3-mini";
+
+// const openai = new OpenAI({
+//     apiKey: OPENAI_API_KEY,
+//     baseURL: `${AZURE_OPENAI_ENDPOINT}/openai/deployments/${AZURE_DEPLOYMENT_NAME}`,
+//     defaultQuery: { "api-version": "2024-06-01" },
+// });
+
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY }); // process.env.OPENAI_API_KEY });
 
 // const LOGS_DIRECTORY = "./logs";
 // Change to your actual logs folder loaction for now where retina gets default downloaded
@@ -40,8 +42,8 @@ export async function analyzeLogs(logsDir: string) {
     console.log("Current working directory 2:", process.cwd());
     const absolutePath = path.resolve(logsDir);
     console.log(`wsl path ${absolutePath}...`);
-    const windowsPath = execSync(`wslpath -w ${absolutePath}`).toString().trim();
-    console.log(`windows path ${windowsPath}...`);
+    // const windowsPath = execSync(`wslpath -w ${absolutePath}`).toString().trim();
+    // console.log(`windows path ${windowsPath}...`);
     console.log(`Reading logs from ${logsDir}...`);
     const logs = await readLogFiles(logsDir);
     if (logs.length === 0) {
@@ -53,7 +55,7 @@ export async function analyzeLogs(logsDir: string) {
 
     try {
         const response = await openai.chat.completions.create({
-            model: "o3-mini",
+            model: "gpt-4o",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.5,
         });
