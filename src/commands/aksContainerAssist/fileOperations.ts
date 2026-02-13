@@ -82,57 +82,25 @@ async function scanForK8sManifests(rootPath: string): Promise<string[]> {
     // Check priority folders
     for (const folder of priorityFolders) {
         const folderPath = path.join(rootPath, folder);
-        await scanDirectory(folderPath, manifestSet, false);
+        await scanDirectory(folderPath, manifestSet, 0, 0);
     }
 
     // Check root directory for loose manifests
-    await scanDirectory(rootPath, manifestSet, false);
+    await scanDirectory(rootPath, manifestSet, 0, 0);
 
     // If nothing found, do shallow recursive search (max 2 levels)
     if (manifestSet.size === 0) {
         logger.debug("No manifests in common locations, performing shallow recursive search");
-        await scanDirectoryRecursive(rootPath, manifestSet, 2, 0);
+        await scanDirectory(rootPath, manifestSet, 2, 0);
     }
 
     return Array.from(manifestSet);
 }
 
 /**
- * Scans a single directory for K8s manifests (non-recursive)
+ 
  */
-async function scanDirectory(dirPath: string, manifestSet: Set<string>, isRecursive: boolean): Promise<void> {
-    try {
-        const dirStat = await vscode.workspace.fs.stat(vscode.Uri.file(dirPath));
-        if (dirStat.type !== vscode.FileType.Directory) {
-            return;
-        }
-
-        const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
-
-        const fileChecks = entries
-            .filter(
-                ([name, type]) => type === vscode.FileType.File && (name.endsWith(".yaml") || name.endsWith(".yml")),
-            )
-            .map(async ([name]) => {
-                const fullPath = path.join(dirPath, name);
-                if (await isKubernetesManifest(fullPath)) {
-                    manifestSet.add(fullPath);
-                    if (!isRecursive) {
-                        logger.debug(`Found K8s manifest: ${fullPath}`);
-                    }
-                }
-            });
-
-        await Promise.all(fileChecks);
-    } catch {
-        // Directory doesn't exist or can't be read - skip silently
-    }
-}
-
-/**
- * Recursively scans directories for K8s manifests up to specified depth
- */
-async function scanDirectoryRecursive(
+async function scanDirectory(
     dirPath: string,
     manifestSet: Set<string>,
     maxDepth: number,
@@ -171,6 +139,8 @@ async function scanDirectoryRecursive(
 
         const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
 
+        const tasks: Promise<void>[] = [];
+
         for (const [name, type] of entries) {
             if (excludedFolders.has(name)) {
                 continue;
@@ -179,13 +149,19 @@ async function scanDirectoryRecursive(
             const fullPath = path.join(dirPath, name);
 
             if (type === vscode.FileType.File && (name.endsWith(".yaml") || name.endsWith(".yml"))) {
-                if (await isKubernetesManifest(fullPath)) {
-                    manifestSet.add(fullPath);
-                }
+                tasks.push(
+                    (async () => {
+                        if (await isKubernetesManifest(fullPath)) {
+                            manifestSet.add(fullPath);
+                        }
+                    })(),
+                );
             } else if (type === vscode.FileType.Directory) {
-                await scanDirectoryRecursive(fullPath, manifestSet, maxDepth, currentDepth + 1);
+                tasks.push(scanDirectory(fullPath, manifestSet, maxDepth, currentDepth + 1));
             }
         }
+
+        await Promise.all(tasks);
     } catch (error) {
         logger.debug(`Skipping directory ${dirPath}:`, error);
     }

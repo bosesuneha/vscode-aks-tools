@@ -3,8 +3,11 @@ import * as vscode from "vscode";
 import * as sinon from "sinon";
 import { promises as fs } from "fs";
 import { IActionContext } from "@microsoft/vscode-azext-utils";
-import { runContainerAssist } from "../../../commands/aksContainerAssist/aksContainerAssist";
+import * as containerAssistModule from "../../../commands/aksContainerAssist/aksContainerAssist";
 import { ContainerAssistAction, ContainerAssistQuickPickItem } from "../../../commands/aksContainerAssist/types";
+import * as containerAssistServiceModule from "../../../commands/aksContainerAssist/containerAssistService";
+
+const { runContainerAssist } = containerAssistModule;
 
 describe("runContainerAssist Command", () => {
     let sandbox: sinon.SinonSandbox;
@@ -106,5 +109,62 @@ describe("runContainerAssist Command", () => {
         assert.ok(capturedItems[1].label.includes("Generate GitHub Workflow"));
         assert.strictEqual(capturedItems[0].action, ContainerAssistAction.GenerateDeployment);
         assert.strictEqual(capturedItems[1].action, ContainerAssistAction.GenerateWorkflow);
+    });
+
+    describe("hasBothActions post-generation options", () => {
+        let testUri: vscode.Uri;
+        let workspaceFolder: vscode.WorkspaceFolder;
+        let showInformationMessageStub: sinon.SinonStub;
+
+        beforeEach(() => {
+            testUri = vscode.Uri.file("/test/path");
+            workspaceFolder = {
+                uri: testUri,
+                name: "test",
+                index: 0,
+            } as vscode.WorkspaceFolder;
+
+            // Setup common stubs
+            sandbox.stub(vscode.workspace, "getWorkspaceFolder").returns(workspaceFolder);
+            sandbox.stub(vscode.workspace, "getConfiguration").returns({
+                get: sandbox.stub().returns(true),
+            } as Partial<vscode.WorkspaceConfiguration> as vscode.WorkspaceConfiguration);
+            sandbox.stub(fs, "stat").resolves({ isFile: () => false } as Awaited<ReturnType<typeof fs.stat>>);
+            sandbox.stub(fs, "readdir").resolves([]);
+            sandbox.stub(fs, "access").rejects(new Error("File not found"));
+
+            // Mock ContainerAssistService
+            sandbox.stub(containerAssistServiceModule.ContainerAssistService.prototype, "isAvailable").resolves({
+                succeeded: true,
+                result: true,
+            });
+
+            showInformationMessageStub = sandbox.stub(vscode.window, "showInformationMessage").resolves(undefined);
+        });
+
+        it("should not show post-generation options when both actions selected but no files generated", async () => {
+            const quickPickItems: ContainerAssistQuickPickItem[] = [
+                {
+                    label: "Generate Deployment Files",
+                    action: ContainerAssistAction.GenerateDeployment,
+                    picked: false,
+                },
+                {
+                    label: "Generate GitHub Workflow",
+                    action: ContainerAssistAction.GenerateWorkflow,
+                    picked: false,
+                },
+            ];
+
+            sandbox.stub(vscode.window, "showQuickPick").resolves(quickPickItems as any);
+
+            // Mock processContainerAssistAction to return undefined (simulating failure/cancellation)
+            sandbox.stub(containerAssistModule, "processContainerAssistAction").resolves(undefined);
+
+            await runContainerAssist({} as IActionContext, testUri);
+
+            // showInformationMessage should NOT be called when no files are generated
+            assert.strictEqual(showInformationMessageStub.callCount, 0);
+        });
     });
 });

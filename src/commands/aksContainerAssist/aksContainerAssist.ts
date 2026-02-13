@@ -99,7 +99,12 @@ export async function runContainerAssist(_context: IActionContext, target: unkno
             if (workflowPath) {
                 allFiles.push(workflowPath);
             }
-            await showPostGenerationOptions(allFiles, workspaceFolder, path.basename(projectRoot), true);
+            // Only show options if at least one action produced files
+            if (allFiles.length > 0) {
+                // Include OIDC option only if workflow was actually generated
+                const includeOIDC = Boolean(workflowPath);
+                await showPostGenerationOptions(allFiles, workspaceFolder, path.basename(projectRoot), includeOIDC);
+            }
         }
 
         logger.info("Container Assist command completed successfully");
@@ -214,7 +219,7 @@ interface ActionResult {
     workflowPath?: string;
 }
 
-async function processContainerAssistAction(
+export async function processContainerAssistAction(
     action: ContainerAssistAction,
     service: ContainerAssistService,
     workspaceFolder: vscode.WorkspaceFolder,
