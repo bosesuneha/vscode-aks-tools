@@ -17,6 +17,11 @@ interface Repository {
     add(paths: string[]): Promise<void>;
     commit(message: string): Promise<void>;
     state: RepositoryState;
+    inputBox: InputBox;
+}
+
+interface InputBox {
+    value: string;
 }
 
 interface RepositoryState {
@@ -132,6 +137,15 @@ export async function stageFilesAndCreatePR(
             },
         );
 
+        // Generate and set commit message in the input box
+        const commitMessage = generateCommitMessage(appName);
+        repository.inputBox.value = commitMessage;
+        logger.info(`Set commit message in input box: ${commitMessage}`);
+
+        // Open Source Control view
+        await vscode.commands.executeCommand("workbench.view.scm");
+        logger.info("Opened Source Control view");
+
         // Ask user if they want to create a PR
         const config = vscode.workspace.getConfiguration("aks.containerAssist");
         const promptForPR = config.get<boolean>("promptForPullRequest", true);
@@ -149,6 +163,10 @@ export async function stageFilesAndCreatePR(
         logger.error("Error details", errorMessage);
         vscode.window.showErrorMessage(l10n.t("Failed to stage files or create PR: {0}", errorMessage));
     }
+}
+
+function generateCommitMessage(appName: string): string {
+    return `Add deployment files for ${appName}`;
 }
 
 async function shouldCreatePR(): Promise<boolean> {
